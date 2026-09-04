@@ -2,3 +2,8 @@ WhatsApp.exe
 WhatsApp.exe~
 *.tmp
 *.log
+whatsapp-webview
+whatsapp-webview.exe
+build/
+*.deb
+*.tar.zst

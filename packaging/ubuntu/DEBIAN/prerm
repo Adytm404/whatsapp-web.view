@@ -1,0 +1,3 @@
+#!/bin/bash
+set -e
+pkill -f whatsapp-webview || true
