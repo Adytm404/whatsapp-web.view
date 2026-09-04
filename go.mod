@@ -14,4 +14,5 @@ require (
 	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 )
