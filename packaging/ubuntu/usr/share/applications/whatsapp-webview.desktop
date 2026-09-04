@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=WhatsApp Webview
+Comment=Lightweight WhatsApp Desktop Webview
+Exec=whatsapp-webview
+Icon=whatsapp-webview
+Terminal=false
+Type=Application
+Categories=Network;InstantMessaging;Chat;
+Keywords=whatsapp;web;chat;messaging;
+StartupWMClass=whatsapp-webview

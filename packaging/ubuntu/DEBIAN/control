@@ -1,0 +1,19 @@
+Package: whatsapp-webview
+Version: 1.0.0
+Section: net
+Priority: optional
+Architecture: amd64
+Maintainer: sandikodev <androxoss@hotmail.com>
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+Recommends: libnotify4
+Description: Lightweight WhatsApp Desktop Webview
+ Cross-platform WhatsApp Web desktop wrapper built with Go.
+ Uses system WebView (WebKitGTK on Linux) for a lightweight,
+ native-feeling WhatsApp experience without Electron.
+ .
+ Features:
+  - Native WebView window
+  - Persistent WhatsApp session
+  - Dark mode support
+  - Native notifications
+  - Single instance protection

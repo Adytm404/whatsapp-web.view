@@ -1,0 +1,41 @@
+# Maintainer: sandikodev <androxoss@hotmail.com>
+pkgname=whatsapp-webview-git
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Lightweight cross-platform WhatsApp Desktop Webview"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sandikodev/whatsapp-webview"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3')
+makedepends=('go' 'git')
+provides=('whatsapp-webview')
+conflicts=('whatsapp-webview')
+source=("$pkgname::git+https://github.com/sandikodev/whatsapp-webview.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$pkgname"
+    git describe --long --tags | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build() {
+    cd "$pkgname"
+    export CGO_ENABLED=0
+    export GOFLAGS="-trimpath"
+    export LDFLAGS="-s -w -X main.version=${pkgver}"
+    go build -o whatsapp-webview .
+}
+
+package() {
+    cd "$pkgname"
+
+    install -Dm755 whatsapp-webview "${pkgdir}/usr/bin/whatsapp-webview"
+
+    install -Dm644 packaging/ubuntu/usr/share/applications/whatsapp-webview.desktop \
+        "${pkgdir}/usr/share/applications/whatsapp-webview.desktop"
+
+    if [ -f assets/icon.png ]; then
+        install -Dm644 assets/icon.png \
+            "${pkgdir}/usr/share/icons/hicolor/128x128/apps/whatsapp-webview.png"
+    fi
+}
