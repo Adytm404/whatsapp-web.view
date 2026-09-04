@@ -1,6 +1,6 @@
-package platform
+//go:build windows
 
-// +build windows
+package platform
 
 import "github.com/go-toast/toast"
 

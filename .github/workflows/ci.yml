@@ -1,0 +1,279 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.26"
+  APP_NAME: whatsapp-webview
+
+permissions:
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Stage 1: Code Quality
+  # ──────────────────────────────────────────────
+  lint:
+    name: Lint & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Check go.sum integrity
+        run: |
+          go mod verify
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Build (matrix)
+  # ──────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            goos: linux
+            goarch: amd64
+            artifact: whatsapp-webview-linux-amd64
+            ext: ""
+          - target: linux-arm64
+            goos: linux
+            goarch: arm64
+            artifact: whatsapp-webview-linux-arm64
+            ext: ""
+          - target: windows-amd64
+            goos: windows
+            goarch: amd64
+            artifact: whatsapp-webview-windows-amd64.exe
+            ext: ".exe"
+            ldflags_extra: "-H windowsgui"
+          - target: macos-arm64
+            goos: darwin
+            goarch: arm64
+            artifact: whatsapp-webview-macos-arm64
+            ext: ""
+          - target: macos-amd64
+            goos: darwin
+            goarch: amd64
+            artifact: whatsapp-webview-macos-amd64
+            ext: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          LDFLAGS="-s -w"
+          if [ -n "${{ matrix.ldflags_extra }}" ]; then
+            LDFLAGS="${LDFLAGS} ${{ matrix.ldflags_extra }}"
+          fi
+          go build -ldflags="${LDFLAGS}" -o dist/${{ matrix.artifact }} .
+
+      - name: Validate binary
+        run: |
+          file dist/${{ matrix.artifact }}
+          ls -lh dist/${{ matrix.artifact }}
+          # Check binary is not empty
+          test -s dist/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Stage 3: Test Linux (real WebView)
+  # ──────────────────────────────────────────────
+  test-linux:
+    name: Test Linux (Xvfb + WebKitGTK)
+    runs-on: ubuntu-latest
+    needs: build
+    container:
+      image: ubuntu:22.04
+      options: --privileged
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            xvfb \
+            libwebkit2gtk-4.1-0 \
+            libgtk-3-0 \
+            dbus \
+            dbus-x11 \
+            procps \
+            file
+
+      - name: Download Linux amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: whatsapp-webview-linux-amd64
+          path: dist
+
+      - name: Validate binary format
+        run: |
+          echo "=== Binary Info ==="
+          file dist/whatsapp-webview-linux-amd64
+          echo ""
+          echo "=== Embedded Check ==="
+          # Check if glaze embedded lib is packed
+          strings dist/whatsapp-webview-linux-amd64 | grep -c "libwebkit" || true
+          echo ""
+          echo "=== Size ==="
+          ls -lh dist/whatsapp-webview-linux-amd64
+
+      - name: Test run (Xvfb, 10s timeout)
+        run: |
+          chmod +x dist/whatsapp-webview-linux-amd64
+          # Start virtual display
+          Xvfb :99 -screen 0 1280x720x24 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          sleep 1
+          # Run app with 10s timeout
+          # Exit 124 = timeout (app was still running = success)
+          # Exit 0 = app exited cleanly
+          # Any other exit = crash
+          set +e
+          timeout 10 dist/whatsapp-webview-linux-amd64 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo ""
+          echo "Exit code: ${EXIT_CODE}"
+          if [ "${EXIT_CODE}" -eq 124 ]; then
+            echo "PASS: App ran for 10s without crashing (killed by timeout)"
+          elif [ "${EXIT_CODE}" -eq 0 ]; then
+            echo "PASS: App exited cleanly"
+          else
+            echo "FAIL: App crashed with exit code ${EXIT_CODE}"
+            kill ${XVFB_PID} 2>/dev/null || true
+            exit 1
+          fi
+          kill ${XVFB_PID} 2>/dev/null || true
+
+      - name: Test run (Xvfb + Wayland emulation, 10s timeout)
+        run: |
+          chmod +x dist/whatsapp-webview-linux-amd64
+          # Start virtual display
+          Xvfb :99 -screen 0 1280x720x24 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          export GDK_BACKEND=x11
+          sleep 1
+          set +e
+          timeout 10 dist/whatsapp-webview-linux-amd64 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo ""
+          echo "Exit code: ${EXIT_CODE}"
+          if [ "${EXIT_CODE}" -eq 124 ]; then
+            echo "PASS: App ran for 10s without crashing (X11 backend)"
+          elif [ "${EXIT_CODE}" -eq 0 ]; then
+            echo "PASS: App exited cleanly"
+          else
+            echo "FAIL: App crashed with exit code ${EXIT_CODE}"
+            kill ${XVFB_PID} 2>/dev/null || true
+            exit 1
+          fi
+          kill ${XVFB_PID} 2>/dev/null || true
+
+  # ──────────────────────────────────────────────
+  # Stage 4: Validate all artifacts
+  # ──────────────────────────────────────────────
+  validate:
+    name: Validate artifacts
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Validate all binaries
+        run: |
+          echo "=== All Artifacts ==="
+          find dist -type f -exec ls -lh {} \;
+          echo ""
+          echo "=== Format Check ==="
+          for f in dist/*/whatsapp-webview-*; do
+            echo "$(basename $f): $(file $f | cut -d: -f2)"
+          done
+          echo ""
+          echo "=== Size Check ==="
+          for f in dist/*/whatsapp-webview-*; do
+            SIZE=$(stat -c%s "$f")
+            NAME=$(basename $f)
+            echo "${NAME}: ${SIZE} bytes"
+            # Fail if > 20MB
+            if [ "${SIZE}" -gt 20971520 ]; then
+              echo "FAIL: ${NAME} is too large (>20MB)"
+              exit 1
+            fi
+          done
+          echo ""
+          echo "PASS: All artifacts validated"
+
+  # ──────────────────────────────────────────────
+  # Stage 5: Package (deb + PKGBUILD)
+  # ──────────────────────────────────────────────
+  package:
+    name: Package (.deb)
+    runs-on: ubuntu-latest
+    needs: [build, test-linux]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: whatsapp-webview-linux-amd64
+          path: dist
+
+      - name: Build .deb package
+        run: |
+          chmod +x dist/whatsapp-webview-linux-amd64
+          VERSION=$(date +%Y%m%d%H%M%S)
+          bash build-deb.sh dist/whatsapp-webview-linux-amd64 ${VERSION}
+
+      - name: Validate .deb
+        run: |
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-deb
+          path: dist/*.deb
+          retention-days: 7

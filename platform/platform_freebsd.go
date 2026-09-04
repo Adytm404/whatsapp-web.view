@@ -1,6 +1,6 @@
-package platform
+//go:build freebsd
 
-// +build freebsd
+package platform
 
 import "fmt"
 

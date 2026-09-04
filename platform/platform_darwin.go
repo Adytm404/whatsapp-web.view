@@ -1,6 +1,6 @@
-package platform
+//go:build darwin
 
-// +build darwin
+package platform
 
 import "fmt"
 

@@ -1,6 +1,6 @@
-package platform
+//go:build linux
 
-// +build linux
+package platform
 
 const OSUserAgent = "X11; Linux x86_64"
 

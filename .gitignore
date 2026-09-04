@@ -1,9 +1,27 @@
+# Binaries
+whatsapp-webview
+whatsapp-webview.exe
+whatsapp-webview-debug
+whatsapp-webview-nowarn
+whatsapp-webview-stripped
+whatsapp-webview-linux-amd64
+dist/
+build/
+
+# Build artifacts
+*.deb
+*.tar.zst
+SHA256SUMS.txt
+
+# Config
 WhatsApp.exe
 WhatsApp.exe~
 *.tmp
 *.log
-whatsapp-webview
-whatsapp-webview.exe
-build/
-*.deb
-*.tar.zst
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Server-specific tooling
+transfer.sh

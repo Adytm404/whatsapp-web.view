@@ -1,6 +1,6 @@
-package platform
+//go:build windows || linux || darwin || freebsd
 
-// +build windows linux darwin freebsd
+package platform
 
 type WebViewConfig struct {
 	Title    string

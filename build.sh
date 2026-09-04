@@ -1,45 +1,63 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-VERSION="${1:-1.0.0}"
+VERSION="${1:-dev}"
 APP_NAME="whatsapp-webview"
+BUILD_DIR="dist"
+LDFLAGS="-s -w -X main.version=${VERSION}"
 
-echo "=== Building WhatsApp Webview v${VERSION} ==="
+info()  { echo -e "\033[1;36m[INFO]\033[0m $*"; }
+ok()    { echo -e "\033[1;32m[ OK ]\033[0m $*"; }
+warn()  { echo -e "\033[1;33m[WARN]\033[0m $*"; }
+fail()  { echo -e "\033[1;31m[FAIL]\033[0m $*"; exit 1; }
 
-# Check Go version
-GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
-echo "Go version: ${GO_VERSION}"
+GO_VERSION=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//') || fail "Go not found. Install Go first."
+info "Build ${APP_NAME} v${VERSION} (Go ${GO_VERSION})"
 
-# Build Linux (primary target)
-echo ""
-echo "[1/4] Building Linux amd64..."
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-s -w -X main.version=${VERSION}" \
-    -o "dist/${APP_NAME}-linux-amd64" .
-echo "    -> dist/${APP_NAME}-linux-amd64 ($(stat -c%s "dist/${APP_NAME}-linux-amd64" | numfmt --to=iec))"
+mkdir -p "${BUILD_DIR}"
 
-# Build Linux ARM64
-echo "[2/4] Building Linux arm64..."
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-    -ldflags="-s -w -X main.version=${VERSION}" \
-    -o "dist/${APP_NAME}-linux-arm64" .
-echo "    -> dist/${APP_NAME}-linux-arm64 ($(stat -c%s "dist/${APP_NAME}-linux-arm64" | numfmt --to=iec))"
+build() {
+    local target="$1" goos="$2" goarch="$3" extra_ldflags="${4:-}"
+    local artifact="${BUILD_DIR}/${APP_NAME}-${target}"
+    local all_ldflags="${LDFLAGS}"
 
-# Build Windows
-echo "[3/4] Building Windows amd64..."
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-    -ldflags="-H windowsgui -s -w -X main.version=${VERSION}" \
-    -o "dist/${APP_NAME}-windows-amd64.exe" .
-echo "    -> dist/${APP_NAME}-windows-amd64.exe ($(stat -c%s "dist/${APP_NAME}-windows-amd64.exe" | numfmt --to=iec))"
+    [ -n "${extra_ldflags}" ] && all_ldflags="${all_ldflags} ${extra_ldflags}"
 
-# Build macOS (Apple Silicon)
-echo "[4/4] Building macOS arm64..."
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-    -ldflags="-s -w -X main.version=${VERSION}" \
-    -o "dist/${APP_NAME}-macos-arm64" .
-echo "    -> dist/${APP_NAME}-macos-arm64 ($(stat -c%s "dist/${APP_NAME}-macos-arm64" | numfmt --to=iec))"
+    info "Building ${target} (${goos}/${goarch})..."
+    CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+        go build -trimpath -ldflags="${all_ldflags}" \
+        -o "${artifact}" .
+    ok "Created ${artifact} ($(du -h "${artifact}" | cut -f1))"
+}
 
-echo ""
-echo "=== Build complete ==="
-echo "All binaries in dist/"
-ls -lh dist/
+# Platform matrix
+build "linux-amd64"     linux   amd64
+build "linux-arm64"     linux   arm64
+build "windows-amd64"   windows amd64 "-H windowsgui"
+build "macos-arm64"     darwin  arm64
+build "macos-amd64"     darwin  amd64
+
+info "Validating binaries..."
+for f in "${BUILD_DIR}"/${APP_NAME}-*; do
+    bash tools/ci-validate.sh "${f}" || fail "Validation failed for ${f}"
+done
+
+info "Generating checksums..."
+cd "${BUILD_DIR}"
+if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum ${APP_NAME}-* > SHA256SUMS.txt
+elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 ${APP_NAME}-* > SHA256SUMS.txt
+else
+    warn "No sha256sum available, skipping checksums"
+fi
+cd - >/dev/null
+
+ok "Build complete!"
+info "Binaries in ${BUILD_DIR}/:"
+ls -lh "${BUILD_DIR}"
+
+if [ -f "${BUILD_DIR}/SHA256SUMS.txt" ]; then
+    info "Checksums:"
+    cat "${BUILD_DIR}/SHA256SUMS.txt"
+fi

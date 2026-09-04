@@ -1,6 +1,6 @@
-package main
+//go:build windows || linux || darwin || freebsd
 
-// +build windows linux darwin freebsd
+package main
 
 import (
 	"fmt"

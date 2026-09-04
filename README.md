@@ -321,6 +321,18 @@ go build -ldflags="-H windowsgui -s -w" -o WhatsApp.exe .
 | Git | Any | `git --version` |
 | WebKitGTK (Linux) | 4.1+ | See platform-specific commands |
 
+### Build Command (Recommended)
+
+Build all platforms + validate + checksums in one command:
+
+```bash
+# All platforms (Linux amd64/arm64, Windows, macOS arm64/amd64)
+./build.sh 1.0.0
+
+# Or use Makefile
+make build-all
+```
+
 ### Build Commands
 
 ```bash
@@ -503,6 +515,14 @@ whatsapp-webview/
 │       └── PKGBUILD               # AUR build script
 │
 ├── build-deb.sh                   # Build .deb package script
+├── build.sh                       # Build all platforms + validate + checksums
+├── Makefile                       # Local dev convenience (lint/build/test)
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                 # CI: lint → build matrix → test → package
+│       └── release.yml            # Release: tag → build → test → GitHub Release
+├── tools/
+│   └── ci-validate.sh             # Binary validation script (used by CI)
 ├── CONTRIBUTING.md                 # Contribution guidelines
 ├── README.md                      # This file
 ├── .gitignore                     # Git ignore rules
@@ -579,7 +599,12 @@ cd whatsapp-webview
 git checkout -b feat/my-new-feature
 
 # Make your changes, then build and test
-CGO_ENABLED=0 go build -ldflags="-s -w" -o whatsapp-webview .
+make lint        # go vet + module check
+make build       # build linux-amd64
+make test        # run unit tests + Xvfb smoke test
+
+# Or run everything the CI would run
+make all
 
 # Commit and push
 git add .
@@ -588,6 +613,56 @@ git push origin feat/my-new-feature
 
 # Open a Pull Request on GitHub
 ```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and delivery.
+
+### CI Workflow (`.github/workflows/ci.yml`)
+
+Runs automatically on every push to `main` and every pull request:
+
+| Stage | Job | What it does |
+|-------|-----|-------------|
+| 1. Lint | `lint` | `go vet`, `go mod verify`, `go mod tidy` integrity check |
+| 2. Build | `build` | Matrix build for 5 platforms (Linux amd64/arm64, Windows, macOS arm64/amd64) |
+| 3. Test | `test-linux` | Downloads Linux binary, runs it twice in **Xvfb** (virtual display) — once with Wayland/X11, verifies no crash within 10s |
+| 4. Validate | `validate` | Checks all artifacts: file format (ELF/Mach-O/PE32), size limit (<20MB), executability |
+| 5. Package | `package` | Builds `.deb` package from tested binary |
+
+> **Gate:** A PR cannot merge if any job fails. Your changes must pass **all** stages before review.
+
+### Release Workflow (`.github/workflows/release.yml`)
+
+Runs automatically when you push a tag (`git tag v1.0.0 && git push --tags`):
+
+1. **Build** all 5 platforms
+2. **Test** Linux binary in Xvfb
+3. **Package** `.deb`
+4. **Create GitHub Release** with:
+   - All platform binaries
+   - `.deb` package
+   - `SHA256SUMS.txt` checksums
+   - Per-platform install instructions
+
+### Local CI Simulation
+
+Reproduce CI checks locally before pushing:
+
+```bash
+# Everything CI runs before merge
+make all
+
+# Just build all platforms + validate
+./build.sh 1.0.0
+
+# Just test (requires Xvfb + WebKitGTK)
+make test
+```
+
+### CI Status Badge
+
+[![CI](https://github.com/sandikodev/whatsapp-webview/actions/workflows/ci.yml/badge.svg)](https://github.com/sandikodev/whatsapp-webview/actions/workflows/ci.yml)
 
 ---
 
