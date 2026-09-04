@@ -265,15 +265,17 @@ jobs:
           chmod +x dist/whatsapp-webview-linux-amd64
           VERSION=$(date +%Y%m%d%H%M%S)
           bash build-deb.sh dist/whatsapp-webview-linux-amd64 ${VERSION}
+          # build-deb.sh outputs to the repo root
+          ls -lh *.deb
 
       - name: Validate .deb
         run: |
-          dpkg-deb --info dist/*.deb
-          dpkg-deb --contents dist/*.deb
+          dpkg-deb --info whatsapp-webview_*.deb
+          dpkg-deb --contents whatsapp-webview_*.deb
 
       - name: Upload .deb
         uses: actions/upload-artifact@v4
         with:
           name: package-deb
-          path: dist/*.deb
+          path: whatsapp-webview_*.deb
           retention-days: 7
