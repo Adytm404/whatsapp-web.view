@@ -114,10 +114,6 @@ Do not delete this folder if the existing login session must remain available.
 
 This app loads WhatsApp Web directly. Chat data and authentication state are handled by WhatsApp Web and stored locally in the WebView profile above. This project is not affiliated with WhatsApp or Meta.
 
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

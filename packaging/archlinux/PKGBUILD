@@ -38,6 +38,4 @@ package() {
         install -Dm644 assets/icon.png \
             "${pkgdir}/usr/share/icons/hicolor/128x128/apps/whatsapp-webview.png"
     fi
-
-    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
