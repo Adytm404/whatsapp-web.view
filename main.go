@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -16,11 +18,13 @@ var (
 	kernel32        = windows.NewLazySystemDLL("kernel32.dll")
 	user32          = windows.NewLazySystemDLL("user32.dll")
 	dwmapi          = windows.NewLazySystemDLL("dwmapi.dll")
+	comdlg32        = windows.NewLazySystemDLL("comdlg32.dll")
 	procCreateMutex = kernel32.NewProc("CreateMutexW")
 	procFindWindow  = user32.NewProc("FindWindowW")
 	procSetFgWindow = user32.NewProc("SetForegroundWindow")
 	procShowNormal  = user32.NewProc("ShowWindow")
 	procDwmSetAttr  = dwmapi.NewProc("DwmSetWindowAttribute")
+	procGetSaveFile = comdlg32.NewProc("GetSaveFileNameW")
 )
 
 const (
@@ -34,7 +38,36 @@ const (
 	DWMWA_USE_IMMERSIVE_DARK_MODE             = 20
 	DWMWA_CAPTION_COLOR                       = 35
 	DWMWA_TEXT_COLOR                          = 36
+	OFN_OVERWRITEPROMPT                       = 0x00000002
+	OFN_NOCHANGEDIR                           = 0x00000008
+	OFN_PATHMUSTEXIST                         = 0x00000800
 )
+
+type openFileName struct {
+	StructSize       uint32
+	Owner            uintptr
+	Instance         uintptr
+	Filter           *uint16
+	CustomFilter     *uint16
+	MaxCustomFilter  uint32
+	FilterIndex      uint32
+	File             *uint16
+	MaxFile          uint32
+	FileTitle        *uint16
+	MaxFileTitle     uint32
+	InitialDir       *uint16
+	Title            *uint16
+	Flags            uint32
+	FileOffset       uint16
+	FileExtension    uint16
+	DefaultExtension *uint16
+	CustData         uintptr
+	Hook             uintptr
+	TemplateName     *uint16
+	Reserved         uintptr
+	Reserved2        uint32
+	FlagsEx          uint32
+}
 
 func setDarkWindowFrame(hwnd uintptr) {
 	darkMode := int32(1)
@@ -110,6 +143,38 @@ func showNativeNotification(title, message, iconPath string) {
 	_ = notification.Push()
 }
 
+func saveFileWithDialog(window uintptr, filename, dataURL string) error {
+	parts := strings.SplitN(dataURL, ",", 2)
+	if len(parts) != 2 {
+		return syscall.EINVAL
+	}
+	data, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return err
+	}
+
+	fileBuffer := make([]uint16, windows.MAX_PATH*4)
+	copy(fileBuffer, windows.StringToUTF16(filename))
+	filter, _ := syscall.UTF16PtrFromString("All files\x00*.*\x00\x00")
+	title, _ := syscall.UTF16PtrFromString("Save WhatsApp file")
+	extension, _ := syscall.UTF16PtrFromString(strings.TrimPrefix(filepath.Ext(filename), "."))
+	name := openFileName{
+		StructSize:       uint32(unsafe.Sizeof(openFileName{})),
+		Owner:            window,
+		Filter:           filter,
+		FilterIndex:      1,
+		File:             &fileBuffer[0],
+		MaxFile:          uint32(len(fileBuffer)),
+		Title:            title,
+		Flags:            OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
+		DefaultExtension: extension,
+	}
+	if result, _, _ := procGetSaveFile.Call(uintptr(unsafe.Pointer(&name))); result == 0 {
+		return nil // User cancelled.
+	}
+	return os.WriteFile(windows.UTF16ToString(fileBuffer), data, 0644)
+}
+
 func main() {
 	_, isSingle := checkSingleInstance()
 	if !isSingle {
@@ -148,6 +213,11 @@ func main() {
 	// Bind native notification bridge
 	_ = w.Bind("sendNativeNotification", func(title, body string) {
 		go showNativeNotification(title, body, iconFullPath)
+	})
+	_ = w.Bind("saveWhatsAppFile", func(filename, dataURL string) {
+		if err := saveFileWithDialog(uintptr(w.Window()), filepath.Base(filename), dataURL); err != nil {
+			log.Printf("Save As failed: %v", err)
+		}
 	})
 
 	// Inject JS: User-Agent spoofing + Notification API polyfill connecting to Go native Toast
@@ -210,6 +280,24 @@ func main() {
 				}
 			}, true);
 			document.documentElement.style.zoom = String(zoom);
+		})();
+
+		// Route links with download attribute through native Save As dialog.
+		(function() {
+			document.addEventListener('click', function(event) {
+				var link = event.target.closest && event.target.closest('a');
+				if (!link || !link.hasAttribute('download') || !window.saveWhatsAppFile) return;
+				var href = link.href;
+				if (!href) return;
+				event.preventDefault();
+				event.stopPropagation();
+				var filename = link.getAttribute('download') || 'WhatsApp download';
+				fetch(href).then(function(response) { return response.blob(); }).then(function(blob) {
+					var reader = new FileReader();
+					reader.onload = function() { window.saveWhatsAppFile(filename, reader.result); };
+					reader.readAsDataURL(blob);
+				}).catch(function() { link.click(); });
+			}, true);
 		})();
 	`
 

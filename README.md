@@ -12,6 +12,7 @@ Lightweight Windows desktop wrapper for [WhatsApp Web](https://web.whatsapp.com)
 - Camera and microphone access for WhatsApp voice and video calls.
 - Persistent zoom level with `Ctrl +`, `Ctrl -`, and `Ctrl 0`.
 - Standard clipboard shortcuts: `Ctrl C`, `Ctrl X`, `Ctrl V`, and `Ctrl A`.
+- Native Windows Save As dialog for downloadable WhatsApp files.
 - Single-instance protection.
 - High-DPI display support.
 - Small native executable.
