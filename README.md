@@ -10,6 +10,8 @@ Lightweight Windows desktop wrapper for [WhatsApp Web](https://web.whatsapp.com)
 - Dark Windows title bar and frame.
 - Windows toast notification bridge.
 - Camera and microphone access for WhatsApp voice and video calls.
+- Persistent zoom level with `Ctrl +`, `Ctrl -`, and `Ctrl 0`.
+- Standard clipboard shortcuts: `Ctrl C`, `Ctrl X`, `Ctrl V`, and `Ctrl A`.
 - Single-instance protection.
 - High-DPI display support.
 - Small native executable.

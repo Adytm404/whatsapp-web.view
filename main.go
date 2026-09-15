@@ -13,14 +13,14 @@ import (
 )
 
 var (
-	kernel32          = windows.NewLazySystemDLL("kernel32.dll")
-	user32            = windows.NewLazySystemDLL("user32.dll")
-	dwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
-	procCreateMutex   = kernel32.NewProc("CreateMutexW")
-	procFindWindow    = user32.NewProc("FindWindowW")
-	procSetFgWindow   = user32.NewProc("SetForegroundWindow")
-	procShowNormal    = user32.NewProc("ShowWindow")
-	procDwmSetAttr    = dwmapi.NewProc("DwmSetWindowAttribute")
+	kernel32        = windows.NewLazySystemDLL("kernel32.dll")
+	user32          = windows.NewLazySystemDLL("user32.dll")
+	dwmapi          = windows.NewLazySystemDLL("dwmapi.dll")
+	procCreateMutex = kernel32.NewProc("CreateMutexW")
+	procFindWindow  = user32.NewProc("FindWindowW")
+	procSetFgWindow = user32.NewProc("SetForegroundWindow")
+	procShowNormal  = user32.NewProc("ShowWindow")
+	procDwmSetAttr  = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 
 const (
@@ -32,8 +32,8 @@ const (
 	// DWM Window Attributes for Dark Theme
 	DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
 	DWMWA_USE_IMMERSIVE_DARK_MODE             = 20
-	DWMWA_CAPTION_COLOR                      = 35
-	DWMWA_TEXT_COLOR                         = 36
+	DWMWA_CAPTION_COLOR                       = 35
+	DWMWA_TEXT_COLOR                          = 36
 )
 
 func setDarkWindowFrame(hwnd uintptr) {
@@ -182,6 +182,34 @@ func main() {
 				}
 				return p;
 			};
+		})();
+
+		// Persist zoom level in the WhatsApp Web profile.
+		(function() {
+			var storageKey = 'whatsapp-desktop-zoom';
+			var zoom = parseFloat(localStorage.getItem(storageKey) || '1');
+			if (!isFinite(zoom) || zoom < 0.5 || zoom > 2) zoom = 1;
+			function saveZoom() {
+				localStorage.setItem(storageKey, String(zoom));
+				document.documentElement.style.zoom = String(zoom);
+			}
+			document.addEventListener('keydown', function(event) {
+				if (!event.ctrlKey || event.altKey || event.metaKey) return;
+				if (event.key === '+' || event.key === '=') {
+					zoom = Math.min(2, Math.round((zoom + 0.1) * 10) / 10);
+					saveZoom();
+					event.preventDefault();
+				} else if (event.key === '-' || event.key === '_') {
+					zoom = Math.max(0.5, Math.round((zoom - 0.1) * 10) / 10);
+					saveZoom();
+					event.preventDefault();
+				} else if (event.key === '0') {
+					zoom = 1;
+					saveZoom();
+					event.preventDefault();
+				}
+			}, true);
+			document.documentElement.style.zoom = String(zoom);
 		})();
 	`
 

@@ -118,6 +118,11 @@ func NewWithOptions(options WebViewOptions) WebView {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Keep standard browser shortcuts such as Ctrl+C, Ctrl+V, and Ctrl+A
+	// available inside WhatsApp Web.
+	if err = settings.PutAreBrowserAcceleratorKeysEnabled(true); err != nil {
+		log.Fatal(err)
+	}
 	// disable context menu
 	err = settings.PutAreDefaultContextMenusEnabled(options.Debug)
 	if err != nil {
